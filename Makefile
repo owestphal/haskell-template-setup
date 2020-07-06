@@ -2,7 +2,7 @@ define existing
 	$(shell test -e $(1) && echo $(1))
 endef
 define replace_expr
-  $(shell test "$(1)" != "" && echo 's\#$(1)\#$(2)\#;')
+  $(shell test "v$(1)" != "v" && echo 's\#$(1)\#$(2)\#;')
 endef
 define part
 	$(shell sed -n "s/^$(1): \(.*\)/\1/p" $(2))
@@ -22,13 +22,21 @@ DATA_ROOT:=$(ROOT)/share
 PKG_DB:=$(ROOT)/pkgdb
 STACK:=$(shell which stack)
 STACK_CALL:=STACK_ROOT=$(STACK_ROOT) $(STACK)
-GHC_PKG:=$(shell which ghc-pkg)
-OLD_ROOT:=$(shell $(STACK_CALL) path --snapshot-install-root)
-OLD_PKG_DB:=$(shell $(STACK_CALL) path --snapshot-pkg-db)
-OLD_ROOT_FILES=$(filter-out $(OLD_PKG_DB),$(wildcard $(OLD_ROOT)/*))
-ROOT_FILES=$(subst $(OLD_ROOT),$(ROOT),$(OLD_ROOT_FILES))
-OLD_PKG_DB_FILES=$(filter-out $(OLD_PKG_DB)/package.cache.lock, $(filter-out $(OLD_PKG_DB)/package.cache, $(wildcard $(OLD_PKG_DB)/*)))
-PKG_DB_FILES=$(subst $(OLD_PKG_DB),$(PKG_DB),$(OLD_PKG_DB_FILES))
+GHC_PKG:=$(shell $(STACK_CALL) exec -- which ghc-pkg)
+GLOBAL_ROOT:=$(dir $(shell $(STACK_CALL) path --compiler-bin))
+ifneq (,$(GLOBAL_ROOT))
+GLOBAL_PKG_DB:=$(shell $(STACK_CALL) path --global-pkg-db)
+GLOBAL_PKG_DB_FILES=$(filter-out $(GLOBAL_PKG_DB)/package.cache.lock, $(filter-out $(GLOBAL_PKG_DB)/package.cache, $(wildcard $(GLOBAL_PKG_DB)/*)))
+endif
+SNAPSHOT_ROOT:=$(shell $(STACK_CALL) path --snapshot-install-root)
+ifneq (,$(SNAPSHOT_ROOT))
+SNAPSHOT_PKG_DB:=$(shell $(STACK_CALL) path --snapshot-pkg-db)
+SNAPSHOT_PKG_DB_FILES=$(filter-out $(SNAPSHOT_PKG_DB)/package.cache.lock, $(filter-out $(SNAPSHOT_PKG_DB)/package.cache, $(wildcard $(SNAPSHOT_PKG_DB)/*)))
+endif
+OLD_PKG_DB_FILES=$(SNAPSHOT_PKG_DB_FILES) $(GLOBAL_PKG_DB_FILES)
+PKG_DB_FILES_S=$(subst $(SNAPSHOT_PKG_DB),$(PKG_DB),$(SNAPSHOT_PKG_DB_FILES))
+PKG_DB_FILES_G=$(subst $(GLOBAL_PKG_DB),$(PKG_DB),$(GLOBAL_PKG_DB_FILES))
+PKG_DB_FILES=$(PKG_DB_FILES_S) $(PKG_DB_FILES_G)
 SNAPSHOT=$(shell cat $(VERSION_FILE))
 SNAPSHOT_BACKUP=$(BACKUP_DIR)/$(shell cat $(VERSION_FILE) | grep -ohe "[0-9a-f]\{64\}")
 VERSION_FILE:=version.txt
@@ -38,6 +46,8 @@ LINK_SUB_DIR_NAME:=$(shell date +"%Y-%m-%d_%H-%M-%S")
 LINK_SUB_DIR:=$(LINK_DIR)/$(LINK_SUB_DIR_NAME)
 LINK_SNAPSHOT_ROOT:=$(LINK_SUB_DIR)/snapshot-root
 LINK_SNAPSHOT:=$(LINK_SUB_DIR)/snapshot
+LINK_GLOBAL_ROOT:=$(LINK_SUB_DIR)/global-root
+LINK_GLOBAL:=$(LINK_SUB_DIR)/global
 BACKUP_DIR:=/tmp/backup
 BACKUP_SUB_DIR_NAME:=$(shell date +"%Y-%m-%d_%H-%M-%S")
 BACKUP_SUB_DIR:=$(BACKUP_DIR)/$(BACKUP_SUB_DIR_NAME)
@@ -52,62 +62,95 @@ TARGET_DATA_DIRS:=$(addprefix $(DATA_ROOT)/,$(notdir $(DATA_DIRS)))
 TARGET_HADDOCK_HTMLS:=$(addprefix $(DOC_ROOT)/,$(notdir $(HADDOCK_HTMLS)))
 TARGET_HADDOCK_INTERFACES:=$(addprefix $(DOC_ROOT)/,$(dir $(notdir $(HADDOCK_INTERFACES)))$(notdir $(HADDOCK_INTERFACES)))
 TARGET_DYNAMIC_LIBRARIES:=$(addprefix $(LIB_ROOT)/,$(notdir $(DYNAMIC_LIBRARIES)))
-TARGET_DIRS:=$(call uniq,$(TARGET_IMPORT_DIRS) $(TARGET_DATA_DIRS) $(TARGET_HADDOCK_DIRS) $(TARGET_HADDOCK_INTERFACES) $(TARGET_DYNAMIC_LIBRARIES))
-SRC_DIRS:=$(call uniq,$(IMPORT_DIRS) $(LIBRARY_DIRS) $(DATA_DIRS) $(HADDOCK_INTERFACES) $(HADDOCK_HTMLS) $(DYNAMIC_LIBRARIES))
+TARGET_LIB_DIRS:=$(call uniq,$(TARGET_IMPORT_DIRS) $(TARGET_DYNAMIC_LIBRARIES))
+TARGET_DOC_DIRS:=$(call uniq,$(TARGET_HADDOCK_DIRS) $(TARGET_HADDOCK_INTERFACES))
+TARGET_DATA_DIRS:=$(call uniq,$(TARGET_DATA_DIRS))
+TARGET_DIRS:=$(TARGET_LIB_DIRS) $(TARGET_DOC_DIRS) $(TARGET_DATA_DIRS)
+SRC_LIB_DIRS:=$(call uniq,$(IMPORT_DIRS) $(LIBRARY_DIRS) $(DYNAMIC_LIBRARIES))
+SRC_DOC_DIRS:=$(call uniq,$(HADDOCK_INTERFACES) $(HADDOCK_HTMLS))
+SRC_DATA_DIRS:=$(call uniq,$(IMPORT_DIRS) $(DATA_DIRS))
+export LINK_SUB_DIR_NAME
 
 MAKEFILE:=$(lastword $(MAKEFILE_LIST))
 
 test:
 	$(MAKE) -e -f $(MAKEFILE) $(TARGET_DIRS)
 
-.PHONY: all build install link backup clean-pkgdb
+.PHONY: all build install link links backup clean
 all: | build install link
 
 build: $(VERSION_FILE)
 
 $(VERSION_FILE): stack.yaml package.yaml
 	$(STACK_CALL) build .
-	echo $(OLD_ROOT) > $(VERSION_FILE)
+	echo $(SNAPSHOT_ROOT) > $(VERSION_FILE)
 
-$(TARGET_DIRS): $(SRC_DIRS)
+$(TARGET_LIB_DIRS): $(SRC_LIB_DIRS)
 	rsync -cr --delete $(filter %$(notdir $@),$^)$(shell test -d $(filter %$(notdir $@),$^) && echo /) $@
 
-$(ROOT):
-	test -d $@ || mkdir -p $@
+$(TARGET_DOC_DIRS): $(SRC_DOC_DIRS)
+	rsync -cr --delete $(filter %$(notdir $@),$^)$(shell test -d $(filter %$(notdir $@),$^) && echo /) $@
 
-$(PKG_DB) $(LIB_ROOT) $(DOC_ROOT): stack.yaml.lock
+$(TARGET_DATA_DIRS): $(SRC_DATA_DIRS)
+	rsync -cr --delete $(filter %$(notdir $@),$^)$(shell test -d $(filter %$(notdir $@),$^) && echo /) $@
+
+$(PKG_DB) $(LIB_ROOT) $(DATA_ROOT) $(DOC_ROOT): stack.yaml.lock
 	rm -rf $@
 	mkdir -p $@
 
-$(PKG_DB)/%: $(OLD_PKG_DB)/% stack.yaml.lock
+ifneq (,$(GLOBAL_ROOT))
+$(PKG_DB)/%: $(GLOBAL_PKG_DB)/% stack.yaml.lock
 	$(eval $@_import:=$(call replace_expr,$(abspath $(dir $(call part,import-dirs,$<))),$(LIB_ROOT)))
 	$(eval $@_data:=$(call replace_expr,$(abspath $(dir $(call part,data-dir,$<))),$(DATA_ROOT)))
 	$(eval $@_html:=$(call replace_expr,$(abspath $(dir $(call part,haddock-html,$<))),$(DOC_ROOT)))
 	bbe -e '$($@_import)$($@_data)$($@_html)' $< > $@
+endif
 
-$(ROOT)/%: $(OLD_ROOT)/% $(ROOT) stack.yaml.lock
-	rsync -cr --delete $< $@
+ifneq (,$(SNAPSHOT_ROOT))
+$(PKG_DB)/%: $(SNAPSHOT_PKG_DB)/% stack.yaml.lock
+	$(eval $@_import:=$(call replace_expr,$(abspath $(dir $(call part,import-dirs,$<))),$(LIB_ROOT)))
+	$(eval $@_data:=$(call replace_expr,$(abspath $(dir $(call part,data-dir,$<))),$(DATA_ROOT)))
+	$(eval $@_html:=$(call replace_expr,$(abspath $(dir $(call part,haddock-html,$<))),$(DOC_ROOT)))
+	bbe -e '$($@_import)$($@_data)$($@_html)' $< > $@
+endif
 
-install: $(PKG_DB)/package.cache
+install: | $(PKG_DB) $(DATA_ROOT) $(LIB_ROOT) $(DOC_ROOT) $(PKG_DB)/package.cache
 
-$(PKG_DB)/package.cache: stack.yaml.lock | $(PKG_DB) $(LIB_ROOT) $(DOC_ROOT) $(PKG_DB_FILES) $(TARGET_DIRS)
-	ghc-pkg recache --package-db=$(PKG_DB)
+$(PKG_DB)/package.cache: stack.yaml.lock $(TARGET_DIRS) $(PKG_DB_FILES)
+	$(GHC_PKG) recache --package-db=$(PKG_DB)
 
-link: $(LINK_SUB_DIR)
+link: $(VERSION_FILE)
+	@test v$(OLD_VERSION) = v$(SNAPSHOT) \
+	  || $(MAKE) -e -f $(MAKEFILE) links
 
-$(LINK_SUB_DIR): $(VERSION_FILE)
-	@export LINK_SUB_DIR=$(LINK_SUB_DIR) \
-	  && test v$(OLD_VERSION) = v$(SNAPSHOT) \
-	  || ( echo linking $$LINK_SUB_DIR to $(SNAPSHOT) \
-	  && mkdir -p $(LINK_SUB_DIR) \
-	  && $(MAKE) -e -f $(MAKEFILE) $(LINK_SNAPSHOT_ROOT) \
-	  && $(MAKE) -e -f $(MAKEFILE) $(LINK_SNAPSHOT) )
+$(LINK_SUB_DIR):
+	mkdir -p $(LINK_SUB_DIR)
 
-$(LINK_SNAPSHOT_ROOT): $(OLD_ROOT) $(LINK_SUB_DIR)
+links: $(LINK_SUB_DIR)
+ifneq (,$(GLOBAL_ROOT))
+	$(MAKE) -e -f $(MAKEFILE) $(LINK_GLOBAL_ROOT)
+	$(MAKE) -e -f $(MAKEFILE) $(LINK_GLOBAL)
+endif
+ifneq (,$(SNAPSHOT_ROOT))
+	$(MAKE) -e -f $(MAKEFILE) $(LINK_SNAPSHOT_ROOT)
+	$(MAKE) -e -f $(MAKEFILE) $(LINK_SNAPSHOT)
+endif
+
+ifneq (,$(GLOBAL_ROOT))
+$(LINK_GLOBAL_ROOT): $(GLOBAL_ROOT) $(LINK_SUB_DIR)
 	ln -s $< $@
 
-$(LINK_SNAPSHOT): $(OLD_PKG_DB) $(LINK_SUB_DIR)
+$(LINK_GLOBAL): $(GLOBAL_PKG_DB) $(LINK_SUB_DIR)
 	ln -s $< $@
+endif
+
+ifneq (,$(SNAPSHOT_ROOT))
+$(LINK_SNAPSHOT_ROOT): $(SNAPSHOT_ROOT) $(LINK_SUB_DIR)
+	ln -s $< $@
+
+$(LINK_SNAPSHOT): $(SNAPSHOT_PKG_DB) $(LINK_SUB_DIR)
+	ln -s $< $@
+endif
 
 backup: $(BACKUP_SUB_DIR)
 
