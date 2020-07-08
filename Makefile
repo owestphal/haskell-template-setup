@@ -1,3 +1,5 @@
+# Variables which are changeable (via command line or editing) are marked by
+# CONFIGURABLE
 define existing
 	$(shell test -e $(1) && echo $(1))
 endef
@@ -14,19 +16,25 @@ define dynamic_library
 		    -depth 1 -name "*$$(sed -n 's/id: \(.*\)/\1/p' $(1))*")
 endef
 uniq = $(if $1,$(firstword $1) $(call uniq,$(filter-out $(firstword $1),$1)))
+# CONFIGURABLE HASH
 HASH:=shasum -a256
 STACK_LOCK:=stack.yaml.lock
 VERSION=$(shell $(HASH) $(STACK_LOCK) | cut -d' ' -f1)
 OLD_VERSION:=$(VERSION)
 
-STACK_ROOT:=/tmp/foobar
+# CONFIGURABLE STACK
+STACK:=$(shell which stack)
+# CONFIGURABLE STACK_ROOT
+STACK_ROOT:=$(shell $(STACK) path --stack-root)
+# CONFIGURABLE ROOT
 ROOT:=/tmp/foobaz
 LIB_ROOT:=$(ROOT)/lib
 DOC_ROOT:=$(ROOT)/doc
 DATA_ROOT:=$(ROOT)/share
+# CONFIGURABLE PKG_DB
 PKG_DB:=$(ROOT)/pkgdb
-STACK:=$(shell which stack)
 STACK_CALL:=STACK_ROOT=$(STACK_ROOT) $(STACK)
+# CONFIGURABLE GHC_PKG
 GHC_PKG:=$(shell $(STACK_CALL) exec -- which ghc-pkg)
 GLOBAL_ROOT:=$(dir $(shell $(STACK_CALL) path --compiler-bin))
 ifneq (,$(GLOBAL_ROOT))
@@ -42,7 +50,7 @@ OLD_PKG_DB_FILES=$(SNAPSHOT_PKG_DB_FILES) $(GLOBAL_PKG_DB_FILES)
 PKG_DB_FILES_S=$(subst $(SNAPSHOT_PKG_DB),$(PKG_DB),$(SNAPSHOT_PKG_DB_FILES))
 PKG_DB_FILES_G=$(subst $(GLOBAL_PKG_DB),$(PKG_DB),$(GLOBAL_PKG_DB_FILES))
 PKG_DB_FILES=$(PKG_DB_FILES_S) $(PKG_DB_FILES_G)
-SNAPSHOT_BACKUP=$(BACKUP_DIR)/$(VERSION)
+# CONFIGURABLE LINK_DIR
 LINK_DIR:=/tmp/updated
 SUB_DIR_NAME:=$(shell date +"%Y-%m-%d_%H-%M-%S")
 LINK_SUB_DIR:=$(LINK_DIR)/$(SUB_DIR_NAME)
@@ -50,7 +58,9 @@ LINK_SNAPSHOT_ROOT:=$(LINK_SUB_DIR)/snapshot-root
 LINK_SNAPSHOT:=$(LINK_SUB_DIR)/snapshot
 LINK_GLOBAL_ROOT:=$(LINK_SUB_DIR)/global-root
 LINK_GLOBAL:=$(LINK_SUB_DIR)/global
+# CONFIGURABLE BACKUP_DIR
 BACKUP_DIR:=/tmp/backup
+SNAPSHOT_BACKUP=$(BACKUP_DIR)/$(VERSION)
 BACKUP_SUB_DIR:=$(BACKUP_DIR)/$(SUB_DIR_NAME)
 IMPORT_DIRS:=$(foreach package,$(OLD_PKG_DB_FILES),$(call part,import-dirs,$(package)))
 LIBRARY_DIRS:=$(foreach package,$(OLD_PKG_DB_FILES),$(call part,library-dirs,$(package)))
@@ -71,13 +81,14 @@ SRC_LIB_DIRS:=$(call uniq,$(IMPORT_DIRS) $(LIBRARY_DIRS) $(DYNAMIC_LIBRARIES))
 SRC_DOC_DIRS:=$(call uniq,$(HADDOCK_INTERFACES) $(HADDOCK_HTMLS))
 SRC_DATA_DIRS:=$(call uniq,$(IMPORT_DIRS) $(DATA_DIRS))
 
-MAKEFILE:=$(lastword $(MAKEFILE_LIST))
 ifneq (,$(GLOBAL_ROOT))
   CREATE_LINKS=$(LINK_GLOBAL_ROOT) $(LINK_GLOBAL)
 endif
 ifneq (,$(SNAPSHOT_ROOT))
   CREATE_LINKS+=$(LINK_SNAPSHOT_ROOT) $(LINK_SNAPSHOT)
 endif
+
+MAKEFILE:=$(lastword $(MAKEFILE_LIST))
 
 .PHONY: all build install link links backup clean
 all: | build install link
