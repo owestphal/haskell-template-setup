@@ -2,8 +2,8 @@ resolver: lts-14.27
 packages:
 - .
 extra-deps:
-- git: ../haskell-template-task
-  commit: a7dfe37fcee5951d751a752b2d55d227c8e3014c
+- git: https://github.com/fmidue/haskell-template-task.git
+  commit: 785e55f42b055e5c1b630a8fdd9c19efc2079d1b
   subdirs:
   - embedded
 - git: https://github.com/fmidue/IOTasks

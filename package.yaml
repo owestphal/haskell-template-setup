@@ -18,6 +18,9 @@ description:         Please see the README on GitHub at <https://github.com/marc
 dependencies:
 - base >= 4.7 && < 5
 - haskell-template-task-embedded
+- codeworld-api
+- IOSpec
+- IOTasks
 
 library:
   source-dirs: .

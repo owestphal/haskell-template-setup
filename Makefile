@@ -17,7 +17,7 @@ define dynamic_library
 endef
 uniq = $(if $1,$(firstword $1) $(call uniq,$(filter-out $(firstword $1),$1)))
 # CONFIGURABLE HASH
-HASH:=shasum -a256
+HASH:=$(shell which shasum) -a256
 STACK_LOCK:=stack.yaml.lock
 VERSION=$(shell $(HASH) $(STACK_LOCK) | cut -d' ' -f1)
 OLD_VERSION:=$(VERSION)
@@ -27,7 +27,7 @@ STACK:=$(shell which stack)
 # CONFIGURABLE STACK_ROOT
 STACK_ROOT:=$(shell $(STACK) path --stack-root)
 # CONFIGURABLE ROOT
-ROOT:=/tmp/foobaz
+ROOT:=/tmp/foo
 LIB_ROOT:=$(ROOT)/lib
 DOC_ROOT:=$(ROOT)/doc
 DATA_ROOT:=$(ROOT)/share
@@ -98,12 +98,15 @@ build: $(STACK_LOCK)
 
 $(TARGET_LIB_DIRS): $(SRC_LIB_DIRS)
 	rsync -cr --delete $(filter %$(notdir $@),$^)$(shell test -d $(filter %$(notdir $@),$^) && echo /) $@
+	@touch $@
 
 $(TARGET_DOC_DIRS): $(SRC_DOC_DIRS)
 	rsync -cr --delete $(filter %$(notdir $@),$^)$(shell test -d $(filter %$(notdir $@),$^) && echo /) $@
+	@touch $@
 
 $(TARGET_DATA_DIRS): $(SRC_DATA_DIRS)
 	rsync -cr --delete $(filter %$(notdir $@),$^)$(shell test -d $(filter %$(notdir $@),$^) && echo /) $@
+	@touch $@
 
 $(PKG_DB) $(LIB_ROOT) $(DATA_ROOT) $(DOC_ROOT): $(STACK_LOCK)
 	rm -rf $@
@@ -159,8 +162,8 @@ backup: $(BACKUP_SUB_DIR)
 
 $(BACKUP_SUB_DIR): $(STACK_LOCK)
 	mkdir -p $(BACKUP_DIR)
-	rsync -r --delete $(ROOT) $(SNAPSHOT_BACKUP)
-	rsync -r --delete $(PKG_DB) $(SNAPSHOT_BACKUP)/pkgdb
+	rsync -cr --delete $(ROOT) $(SNAPSHOT_BACKUP)
+	rsync -cr --delete $(PKG_DB) $(SNAPSHOT_BACKUP)/pkgdb
 	ln -s $(SNAPSHOT_BACKUP) $(BACKUP_SUB_DIR)
 
 clean: $(ROOT) $(PKG_DB)

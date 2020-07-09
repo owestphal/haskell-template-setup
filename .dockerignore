@@ -1,0 +1,7 @@
+*.lock
+.git
+.gitignore
+.stack-work
+Dockerfile
+create.sh
+root
