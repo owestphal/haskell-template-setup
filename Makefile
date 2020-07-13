@@ -13,7 +13,7 @@ define dynamic_library
 	$(shell grep "^dynamic-library-dirs: " $(1) > /dev/null \
 	  && test "$$(sed -n 's/^dynamic-library-dirs: \(.*\)$$/\1/p' $(1))" != "$$(sed -n 's/^library-dirs: \(.*\)$$/\1/p' $(1))" \
 	  && find $$(sed -n "s/^dynamic-library-dirs: \(.*\)$$/\1/p" $(1)) \
-		    -depth 1 -name "*$$(sed -n 's/id: \(.*\)/\1/p' $(1))*")
+		    -mindepth 1 -maxdepth 1 -name "*$$(sed -n 's/id: \(.*\)/\1/p' $(1))*")
 endef
 uniq = $(if $1,$(firstword $1) $(call uniq,$(filter-out $(firstword $1),$1)))
 # CONFIGURABLE HASH
@@ -69,17 +69,17 @@ HADDOCK_INTERFACES:=$(foreach package,$(OLD_PKG_DB_FILES),$(call exisiting,$(cal
 HADDOCK_HTMLS:=$(foreach package,$(OLD_PKG_DB_FILES),$(call existing,$(call part,haddock-html,$(package))))
 DYNAMIC_LIBRARIES:=$(foreach package,$(OLD_PKG_DB_FILES),$(call dynamic_library,$(package)))
 TARGET_IMPORT_DIRS:=$(addprefix $(LIB_ROOT)/,$(notdir $(IMPORT_DIRS)))
-TARGET_DATA_DIRS:=$(addprefix $(DATA_ROOT)/,$(notdir $(DATA_DIRS)))
+TARGET_SHARE_DIRS:=$(addprefix $(DATA_ROOT)/,$(notdir $(DATA_DIRS)))
 TARGET_HADDOCK_HTMLS:=$(addprefix $(DOC_ROOT)/,$(notdir $(HADDOCK_HTMLS)))
 TARGET_HADDOCK_INTERFACES:=$(addprefix $(DOC_ROOT)/,$(dir $(notdir $(HADDOCK_INTERFACES)))$(notdir $(HADDOCK_INTERFACES)))
 TARGET_DYNAMIC_LIBRARIES:=$(addprefix $(LIB_ROOT)/,$(notdir $(DYNAMIC_LIBRARIES)))
 TARGET_LIB_DIRS:=$(call uniq,$(TARGET_IMPORT_DIRS) $(TARGET_DYNAMIC_LIBRARIES))
 TARGET_DOC_DIRS:=$(call uniq,$(TARGET_HADDOCK_DIRS) $(TARGET_HADDOCK_INTERFACES))
-TARGET_DATA_DIRS:=$(call uniq,$(TARGET_DATA_DIRS))
+TARGET_DATA_DIRS:=$(call uniq,$(TARGET_SHARE_DIR))
 TARGET_DIRS:=$(TARGET_LIB_DIRS) $(TARGET_DOC_DIRS) $(TARGET_DATA_DIRS)
 SRC_LIB_DIRS:=$(call uniq,$(IMPORT_DIRS) $(LIBRARY_DIRS) $(DYNAMIC_LIBRARIES))
 SRC_DOC_DIRS:=$(call uniq,$(HADDOCK_INTERFACES) $(HADDOCK_HTMLS))
-SRC_DATA_DIRS:=$(call uniq,$(IMPORT_DIRS) $(DATA_DIRS))
+SRC_DATA_DIRS:=$(call uniq,$(DATA_DIRS))
 
 ifneq (,$(GLOBAL_ROOT))
   CREATE_LINKS=$(LINK_GLOBAL_ROOT) $(LINK_GLOBAL)
