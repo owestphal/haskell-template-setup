@@ -7,7 +7,7 @@ extra-deps:
   subdirs:
   - embedded
 - git: https://github.com/fmidue/IOTasks
-  commit: 943ea54f936d1d56725599089e1ff2bac39c6ea2
+  commit: ce005d4c16cfac5e24ed6b7d8e90f1480ab9c6dd
 - IOSpec-0.3.1.1@sha256:7458ea286386d76af1cd6e5b364914914783cdc7363a4381c795d053be129824,2773
 - codeworld-api-0.6.0@sha256:24b46a4867bec0f3d880be6e9bd5983c9c9941016c8245fd034eb8826878c5f4,6234
 - blank-canvas-0.7.1@sha256:2767baa366510c477dc104e58462d93d717d72710d78d07119614e47ab7e6d67,5057
